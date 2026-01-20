@@ -1,6 +1,6 @@
 ﻿{
-  "agentId": 3,
-  "agentName": "GSI-N-5500",
+  "agentId": 4,
+  "agentName": "testing",
   "poolId": 1,
   "poolName": "Default",
   "serverUrl": "https://pipelinesghubeus15.actions.githubusercontent.com/PjiVRkDDWxiTwUHZXdYEt4JmbeJU2CMjpcHCV2C0I84SWlINSv/",

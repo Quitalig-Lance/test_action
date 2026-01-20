@@ -1,0 +1,36 @@
+[2026-01-20 05:42:23Z INFO HostContext] No proxy settings were found based on environmental variables (http_proxy/https_proxy/HTTP_PROXY/HTTPS_PROXY)
+[2026-01-20 05:42:23Z INFO HostContext] Well known directory 'Bin': 'C:\Users\lance_j\Desktop\github_action\actions-runner\bin'
+[2026-01-20 05:42:23Z INFO HostContext] Well known directory 'Root': 'C:\Users\lance_j\Desktop\github_action\actions-runner'
+[2026-01-20 05:42:23Z INFO HostContext] Well known config file 'Credentials': 'C:\Users\lance_j\Desktop\github_action\actions-runner\.credentials'
+[2026-01-20 05:42:24Z INFO HostContext] Well known directory 'Bin': 'C:\Users\lance_j\Desktop\github_action\actions-runner\bin'
+[2026-01-20 05:42:24Z INFO HostContext] Well known directory 'Root': 'C:\Users\lance_j\Desktop\github_action\actions-runner'
+[2026-01-20 05:42:24Z INFO HostContext] Well known config file 'Runner': 'C:\Users\lance_j\Desktop\github_action\actions-runner\.runner'
+[2026-01-20 05:42:24Z INFO Listener] Runner is built for Windows (X64) - win-x64.
+[2026-01-20 05:42:24Z INFO Listener] RuntimeInformation: Microsoft Windows 10.0.26200.
+[2026-01-20 05:42:24Z INFO Listener] Version: 2.331.0
+[2026-01-20 05:42:24Z INFO Listener] Commit: 39f6c643d3032f8795fa71f1482731ca90c8e038
+[2026-01-20 05:42:24Z INFO Listener] Culture: ja-JP
+[2026-01-20 05:42:24Z INFO Listener] UI Culture: ja-JP
+[2026-01-20 05:42:24Z INFO HostContext] Well known directory 'Bin': 'C:\Users\lance_j\Desktop\github_action\actions-runner\bin'
+[2026-01-20 05:42:24Z INFO HostContext] Well known directory 'Root': 'C:\Users\lance_j\Desktop\github_action\actions-runner'
+[2026-01-20 05:42:24Z INFO Listener] Validating directory permissions for: 'C:\Users\lance_j\Desktop\github_action\actions-runner'
+[2026-01-20 05:42:24Z ERR  Terminal] WRITE ERROR: An error occurred: Permission to read the directory contents is required for 'C:\Users\lance_j\Desktop\github_action\actions-runner' and each directory up the hierarchy. Access to the path 'C:\Users\lance_j\Desktop\github_action' is denied.
+[2026-01-20 05:42:24Z ERR  Listener] System.UnauthorizedAccessException: Permission to read the directory contents is required for 'C:\Users\lance_j\Desktop\github_action\actions-runner' and each directory up the hierarchy. Access to the path 'C:\Users\lance_j\Desktop\github_action' is denied.
+ ---> System.UnauthorizedAccessException: Access to the path 'C:\Users\lance_j\Desktop\github_action' is denied.
+   at System.IO.Enumeration.FileSystemEnumerator`1.CreateDirectoryHandle(String path, Boolean ignoreNotFound)
+   at System.IO.Enumeration.FileSystemEnumerator`1.Init()
+   at System.IO.Enumeration.FileSystemEnumerable`1..ctor(String directory, FindTransform transform, EnumerationOptions options, Boolean isNormalized)
+   at System.IO.Enumeration.FileSystemEnumerableFactory.UserEntries(String directory, String expression, EnumerationOptions options)
+   at System.IO.Directory.InternalEnumeratePaths(String path, String searchPattern, SearchTarget searchTarget, EnumerationOptions options)
+   at GitHub.Runner.Sdk.IOUtil.ValidateExecutePermission(String directory)
+   --- End of inner exception stack trace ---
+   at GitHub.Runner.Sdk.IOUtil.ValidateExecutePermission(String directory)
+   at GitHub.Runner.Listener.Program.MainAsync(IHostContext context, String[] args)
+[2026-01-20 05:42:24Z ERR  Listener] #####################################################
+[2026-01-20 05:42:24Z ERR  Listener] System.UnauthorizedAccessException: Access to the path 'C:\Users\lance_j\Desktop\github_action' is denied.
+   at System.IO.Enumeration.FileSystemEnumerator`1.CreateDirectoryHandle(String path, Boolean ignoreNotFound)
+   at System.IO.Enumeration.FileSystemEnumerator`1.Init()
+   at System.IO.Enumeration.FileSystemEnumerable`1..ctor(String directory, FindTransform transform, EnumerationOptions options, Boolean isNormalized)
+   at System.IO.Enumeration.FileSystemEnumerableFactory.UserEntries(String directory, String expression, EnumerationOptions options)
+   at System.IO.Directory.InternalEnumeratePaths(String path, String searchPattern, SearchTarget searchTarget, EnumerationOptions options)
+   at GitHub.Runner.Sdk.IOUtil.ValidateExecutePermission(String directory)
