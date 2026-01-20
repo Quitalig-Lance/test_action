@@ -17,15 +17,15 @@ jobs:
 
       # REMOVE actions/setup-python and use this instead:
       - name: Verify Python version
-        run: python --version
+        run: py --version
 
       - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          py -m pip install --upgrade pip
+          py -m pip install -r requirements.txt
 
       - name: Run sync script
         env:
           # We use Secrets to hide your DB URL from the public
           DB_URL: ${{ secrets.DB_URL }}
-        run: python script.py
+        run: 'C:\Users\lance_j\AppData\Local\Programs\Python\Python313\python.exe' script.py
