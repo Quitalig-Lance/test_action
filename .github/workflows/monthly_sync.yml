@@ -1,31 +1,23 @@
-name: Monthly Corporate Data Sync
+name: Monthly Corporate Sync
 
 on:
   schedule:
-    # Runs at 00:00 on the 1st of every month
     - cron: '0 0 1 * *'
   workflow_dispatch:
-    # This allows you to click a "Run now" button for the initial startup
 
 jobs:
-  build:
+  sync_data:
     runs-on: self-hosted
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # REMOVE actions/setup-python and use this instead:
-      - name: Verify Python version
-        run: py --version
-
       - name: Install dependencies
         run: |
-          py -m pip install --upgrade pip
-          py -m pip install -r requirements.txt
+          "C:\Users\lance_j\AppData\Local\Programs\Python\Python313\python.exe" -m pip install --upgrade pip
+          "C:\Users\lance_j\AppData\Local\Programs\Python\Python313\python.exe" -m pip install -r requirements.txt
 
-      - name: Run sync script
+      - name: Run Sync Script
         env:
-          # We use Secrets to hide your DB URL from the public
           DB_URL: ${{ secrets.DB_URL }}
-        run: 'C:\Users\lance_j\AppData\Local\Programs\Python\Python313\python.exe' script.py
+        run: "C:\Users\lance_j\AppData\Local\Programs\Python\Python313\python.exe" script.py
