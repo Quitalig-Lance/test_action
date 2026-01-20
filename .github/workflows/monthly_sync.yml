@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
       - name: Checkout code
@@ -29,4 +29,4 @@ jobs:
         env:
           # We use Secrets to hide your DB URL from the public
           DB_URL: ${{ secrets.DB_URL }}
-        run: python yawa.py
+        run: python script.py
