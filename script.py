@@ -401,7 +401,7 @@ def main():
 
     # Iterate through the Map we defined earlier
     for suffix, table in ENDPOINTS_MAP.items():
-        logging.info(f'[{ i } / { total_tables }] Starting sync for table: { table }')
+        logging.info(f'Starting sync for table: { table }')
         
         try:
             start_time = time.time()
