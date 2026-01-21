@@ -2,6 +2,7 @@ import pandas as pd
 import requests
 import os
 import logging
+import time
 from datetime import datetime, timedelta
 from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
@@ -132,7 +133,7 @@ MAPPING_CONFIG = {
         ######### TO REMOVE #########
         "finance.accounting_standards": "accounting_standard",
         "finance.fiscal_year_cover_page": "fiscal_year",
-        
+
         "period": "fiscal_period",
         "net_sales_summary_of_business_results": "net_sales",
         "net_sales_summary_of_business_results_unit_ref": "net_sales_unit",
@@ -171,14 +172,14 @@ MAPPING_CONFIG = {
         "patent_type": "patent_design_trademark",
         "application_number": "application_number",
         "application_date": "application_date",
-        
+
         "fi_code": "patent_fi_code",
         "fi_jp": "patent_fi_code_jp",
         "fterm_code": "patent_f_term_theme_code",
-        
+
         "design_code": "design_new_classification_code",
         "design_jp": "design_new_classification_code_jp",
-        
+
         "trademark_code": "trademark_class_code",
         "trademark_jp": "trademark_class_code_jp",
         "title": "invention_name_or_design_or_trademark"
@@ -216,14 +217,14 @@ MAPPING_CONFIG = {
         "workplace_info.base_infos.average_continuous_service_years": "average_years_of_service_for_permanent_employees",
         "workplace_info.base_infos.average_age": "average_age_of_employees",
         "workplace_info.base_infos.month_average_predetermined_overtime_hours": "average_monthly_overtime_hours",
-        
+
         "workplace_info.women_activity_infos.female_workers_proportion_type": "ratio_of_female_employees_range",
         "workplace_info.women_activity_infos.female_workers_proportion": "ratio_of_female_employees",
         "workplace_info.women_activity_infos.female_share_of_manager": "number_of_female_managers",
         "workplace_info.women_activity_infos.gender_total_of_manager": "total_number_of_managers_male_and_female",
         "workplace_info.women_activity_infos.female_share_of_officers": "number_of_female_executives",
         "workplace_info.women_activity_infos.gender_total_of_officers": "total_number_of_executives_male_and_female",
-        
+
         "workplace_info.compatibility_of_childcare_and_work.number_of_paternity_leave": "eligible_for_childcare_leave_male",
         "workplace_info.compatibility_of_childcare_and_work.number_of_maternity_leave": "eligible_for_childcare_leave_female",
         "workplace_info.compatibility_of_childcare_and_work.paternity_leave_acquisition_num": "taking_childcare_leave_male",
@@ -301,7 +302,7 @@ def parse_gbiz_table(table_name, raw_json):
     valid_cols = []
     for v in m_cfg.values():
         valid_cols.extend(v) if isinstance(v, list) else valid_cols.append(v)
-    
+
     return df[df.columns.intersection(valid_cols)]
 
 def sync_endpoint(engine, endpoint_suffix, table_name, from_date, to_date):
@@ -312,17 +313,17 @@ def sync_endpoint(engine, endpoint_suffix, table_name, from_date, to_date):
     page = 1
     total_inserts = 0
     total_updates = 0
-    
+
     print(f"\n>>> Syncing { table_name }...")
 
     while True:
         params = { 'page': page, 'from': from_date, 'to': to_date }
         response = requests.get(f"{ BASE_URL }{ endpoint_suffix }", headers=headers, params=params)
-        
+
         if response.status_code != 200:
             logging.error(f"Error { response.status_code } on { table_name }")
             break
-            
+
         raw_json = response.json()
         if not raw_json.get("hojin-infos") or raw_json.get("update_infos"):
             print(f"    - No new records found for { table_name }.")
@@ -337,7 +338,7 @@ def sync_endpoint(engine, endpoint_suffix, table_name, from_date, to_date):
         if not df.empty:
             # 1. Temporary Upload for Upsert
             df.to_sql('temp_upsert', engine, if_exists='replace', index=False)
-            
+
             pk_map = {
                 "patent_information_gbizinfo": "corporate_number, application_number",
                 "notification_certification_information_gbizinfo": "corporate_number, notification_certification",
@@ -346,16 +347,16 @@ def sync_endpoint(engine, endpoint_suffix, table_name, from_date, to_date):
                 "procurement_information_gbizinfo": "corporate_number, project_name"
             }
             pk = pk_map.get(table_name, "corporate_number")
-            
+
             pk_list = [ p.strip() for p in pk.split(",") ]
             update_cols = [
                 f'"{ c }" = COALESCE(EXCLUDED."{ c }", { table_name }."{ c }")'
                 for c in df.columns if c not in pk_list
             ]
-            
+
             update_stmt = ", ".join(update_cols)
             cols_str = ", ".join([f'"{ c }"' for c in df.columns])
-            
+
             # 2. SQL Upsert Logic
             with engine.begin() as conn:
                 # Note: 'corporate_number' is usually the PK,
@@ -371,9 +372,9 @@ def sync_endpoint(engine, endpoint_suffix, table_name, from_date, to_date):
                 result = conn.execute(text(query))
                 for row in result:
                     if row.is_insert:
-                        insert_count += 1
+                        total_inserts += 1
                     else:
-                        update_count += 1
+                        total_updates += 1
 
                 conn.execute(text("DROP TABLE IF EXISTS temp_upsert"))
             print(f"    - Page {page}: Processed {len(df)} records.")
@@ -381,8 +382,8 @@ def sync_endpoint(engine, endpoint_suffix, table_name, from_date, to_date):
         # Check for next page
         if page >= raw_json.get("total_pages", 1): break
         page += 1
-        
-    return insert_count, update_count
+
+    return total_inserts, total_updates
 
 def main():
     if not DB_URL:
@@ -392,13 +393,23 @@ def main():
     engine = create_engine(DB_URL)
     # Define your date range (e.g., last 32 days)
     to_date = datetime.now().strftime('%Y%m%d')
-    from_date = (datetime.now() - timedelta(days=32)).strftime('%Y%m%d')
+    from_date = datetime(2025, 9, 1).strftime('%Y%m%d')
+    # from_date = (datetime.now() - timedelta(days=32)).strftime('%Y%m%d')
 
     report_data = []
+    total_tables = len(ENDPOINTS_MAP)
+
     # Iterate through the Map we defined earlier
     for suffix, table in ENDPOINTS_MAP.items():
+        logging.info(f'[{ i } / { total_tables }] Starting sync for table: { table }')
+        
         try:
+            start_time = time.time()
             ins, upd = sync_endpoint(engine, suffix, table, from_date, to_date)
+            
+            duration = time.time() - start_time
+            logging.info(f'✅ Finished { table }: { ins } inserted, { upd } updated. ({duration.2f} seconds).')
+            
             report_data.append({
                 'table': table,
                 'status': "✅" if (ins + upd) > 0 else "💤",
@@ -406,7 +417,7 @@ def main():
                 'updated': upd
             })
         except Exception as e:
-            logging.error(f"Failed to sync {table}: {e}")
+            logging.error(f"Failed to sync { table }: { e }")
             report_data.append({
                 "table": table,
                 "status": "❌ Error",
@@ -416,13 +427,13 @@ def main():
 
     with open("summary.md", "w", encoding="utf-8") as f:
         f.write("## 🚀 gBizInfo Daily Sync Report\n")
-        f.write(f"**Date Range:** `{from_date}` to `{to_date}`\n\n")
+        f.write(f"**Date Range:** `{ from_date }` to `{ to_date }`\n\n")
         f.write("| Table Name | Status | New Inserts | Updates |\n")
         f.write("| :--- | :---: | :---: | :---: |\n")
-        
+
         for item in report_data:
-            f.write(f"| {item['table']} | {item['status']} | {item['inserted']} | {item['updated']} |\n")
-            
+            f.write(f"| { item['table'] } | { item['status'] } | { item['inserted'] } | { item['updated'] } |\n")
+
     print("\n>>> Sync complete. Summary generated in summary.md")
 
 
