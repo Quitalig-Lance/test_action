@@ -92,9 +92,9 @@ MAPPING_CONFIG = {
         "company_size_female": "employees_female",
         "business_items": "product_lineup_list",
         "business_summary": "business_overview",
-        "company_url": "company_website",
+        # company_website
         "date_of_establishment": "date_of_establishment",
-        "founding_year": "year_of_founding",
+        # year_of_founding,
         "update_date": "last_updated_date",
         "qualification_grade": "qualification_level"
     },
@@ -102,7 +102,7 @@ MAPPING_CONFIG = {
         "corporate_number": "corporate_number",
         ######### TO REMOVE #########
         "name": ["name_corporate_number", "name"],
-        "location": ["headquarters_address_corporate_number", "headquarters_address"],
+        "location": ["headquarters_addrss_corporate_number", "headquarters_address"],
         ######### TO REMOVE #########
         "date_of_approval": "certification_date",
         "title": "notification_certification",
@@ -138,8 +138,8 @@ MAPPING_CONFIG = {
         "net_sales_summary_of_business_results_unit_ref": "net_sales_unit",
         "operating_revenue1_summary_of_business_results": "operating_revenue",
         "operating_revenue1_summary_of_business_results_unit_ref": "operating_revenue_unit",
-        "operating_revenue2_summary_of_business_results": "operating_income",
-        "operating_revenue2_summary_of_business_results_unit_ref": "operating_income_unit",
+        # "operating_income",
+        # "operating_income_unit",
         "gross_operating_revenue_summary_of_business_results": "total_operating_revenue",
         "gross_operating_revenue_summary_of_business_results_unit_ref": "total_operating_revenue_unit",
         "ordinary_income_summary_of_business_results": "ordinary_revenue",
@@ -231,200 +231,123 @@ MAPPING_CONFIG = {
     }
 }
 
-def preprocess_gbiz_data(hojin_infos):
-    """Handles all data cleaning (financials, patents, lists) in one pass."""
-    for record in hojin_infos:
-        # Financial Shareholder logic
-        finance = record.get("finance")
-        if finance and isinstance(finance, dict):
-            sh_list = finance.get("major_shareholders", [])
-            if isinstance(sh_list, list):
-                sh_sorted = sorted(sh_list, key=lambda x: x.get("shareholding_ratio") or 0, reverse=True)
-                for i in range(1, 6):
-                    if i <= len(sh_sorted):
-                        finance[f"sh{i}_n"] = sh_sorted[i-1].get("name")
-                        finance[f"sh{i}_r"] = sh_sorted[i-1].get("shareholding_ratio")
-                    else:
-                        finance[f"sh{i}_n"] = finance[f"sh{i}_r"] = None
+def prepare_financial_records(records):
+    """Sorts shareholders and injects top 5 into the finance object for flattening."""
+    for record in records:
+        finance = record.get("finance", {})
+        if not finance: continue
+        
+        sh_list = finance.get("major_shareholders", [])
+        if isinstance(sh_list, list):
+            # Sort by ratio descending
+            sorted_sh = sorted(sh_list, key=lambda x: float(x.get("shareholding_ratio") or 0), reverse=True)
+            
+            # Inject top 5 into the finance dictionary with simple keys for meta-tracking
+            for i in range(1, 6):
+                if i <= len(sorted_sh):
+                    finance[f"sh{i}_n"] = sorted_sh[i-1].get("name_major_shareholders")
+                    finance[f"sh{i}_r"] = sorted_sh[i-1].get("shareholding_ratio")
+                else:
+                    finance[f"sh{i}_n"] = None
+                    finance[f"sh{i}_r"] = None
 
-        # Patent logic
-        patents = record.get("patent", [])
-        if isinstance(patents, list):
-            for p in patents:
-                classifications = p.get("classifications", [])
-                if isinstance(classifications, list):
-                    for c in classifications:
-                        code_name = c.get("コード名")
-                        if code_name == "FI分類":
-                            p["fi_code"], p["fi_jp"] = c.get("コード値"), c.get("日本語")
-                        elif code_name == "Fターム-テーマコード":
-                            p["fterm_code"] = c.get("コード値")
-                        elif code_name == "意匠新分類":
-                            p["design_code"], p["design_jp"] = c.get("コード値"), c.get("日本語")
-                        elif code_name == "類":
-                            p["trademark_code"], p["trademark_jp"] = c.get("コード値"), c.get("日本語")
-
-        # Joint Signature logic for Procurement/Subsidies
-        for key in ["procurement", "subsidy"]:
-            items = record.get(key, [])
-            if isinstance(items, list):
-                for item in items:
-                    joint = item.get("joint_signatures")
-                    item["joint_signatures"] = ", ".join(joint) if isinstance(joint, list) else None
-
-    return hojin_infos
-
-def parse_gbiz_table(table_name, raw_json):
-    """Main function to transform gBizInfo JSON into a clean DataFrame."""
-    data = raw_json.get("hojin-infos", [])
-    if not data: return pd.DataFrame()
-
-    processed_data = preprocess_gbiz_data(data)
-    t_cfg = TABLE_CONFIG.get(table_name)
-    m_cfg = MAPPING_CONFIG.get(table_name)
-
-    # Flatten logic
-    if t_cfg.get("record_path"):
-        df = pd.json_normalize(processed_data, record_path=t_cfg["record_path"], meta=t_cfg["meta"], errors='ignore')
-    else:
-        df = pd.json_normalize(processed_data)
-
-    # Column Mapping (Handles multi-columns and renaming)
-    for src_key, target in m_cfg.items():
-        if src_key in df.columns:
-            if isinstance(target, list):
-                for col in target: df[col] = df[src_key]
-            else:
-                df = df.rename(columns={src_key: target})
-
-    # Final filtering to target columns only
-    valid_cols = []
-    for v in m_cfg.values():
-        valid_cols.extend(v) if isinstance(v, list) else valid_cols.append(v)
-    
-    return df[df.columns.intersection(valid_cols)]
+    return records
 
 def sync_endpoint(engine, endpoint_suffix, table_name, from_date, to_date):
-    """
-    Handles API requests, calls the Master Parser, and upserts to the DB.
-    """
     headers = {'accept': 'application/json', 'X-hojinInfo-api-token': GBIZ_TOKEN}
     page = 1
-    total_inserts = 0
-    total_updates = 0
     
-    print(f"\n>>> Syncing { table_name }...")
+    print(f"\n>>> Syncing {table_name}...")
 
     while True:
-        params = { 'page': page, 'from': from_date, 'to': to_date }
-        response = requests.get(f"{ BASE_URL }{ endpoint_suffix }", headers=headers, params=params)
+        params = {'page': page, 'from': from_date, 'to': to_date}
+        response = requests.get(f"{BASE_URL}{endpoint_suffix}", headers=headers, params=params)
         
         if response.status_code != 200:
-            logging.error(f"Error { response.status_code } on { table_name }")
+            logging.error(f"Error {response.status_code} on {table_name}")
             break
             
-        raw_json = response.json()
-        if not raw_json.get("hojin-infos") or raw_json.get("update_infos"):
-            print(f"    - No new records found for { table_name }.")
-            break
-
-        # --- THE REFACTORED INTEGRATION POINT ---
-        # Instead of manual flattening and renaming, we call our Master Parser.
-        # This one line replaces all the old 'if list_key' logic.
-        df = parse_gbiz_table(table_name, raw_json)
-        # ----------------------------------------
-
-        if not df.empty:
-            # 1. Temporary Upload for Upsert
-            df.to_sql('temp_upsert', engine, if_exists='replace', index=False)
-            
-            pk_map = {
-                "patent_information_gbizinfo": "corporate_number, application_number",
-                "notification_certification_information_gbizinfo": "corporate_number, notification_certification",
-                "award_information_gbizinfo": "corporate_number, award_name",
-                "subsidy_information_gbizinfo": "corporate_number, subsidy",
-                "procurement_information_gbizinfo": "corporate_number, project_name"
-            }
-            pk = pk_map.get(table_name, "corporate_number")
-            
-            pk_list = [ p.strip() for p in pk.split(",") ]
-            update_cols = [
-                f'"{ c }" = COALESCE(EXCLUDED."{ c }", { table_name }."{ c }")'
-                for c in df.columns if c not in pk_list
-            ]
-            
-            update_stmt = ", ".join(update_cols)
-            cols_str = ", ".join([f'"{ c }"' for c in df.columns])
-            
-            # 2. SQL Upsert Logic
-            with engine.begin() as conn:
-                # Note: 'corporate_number' is usually the PK,
-                # but for lists (patents, etc.), you may want to handle conflicts differently.
-                query = f"""
-                    INSERT INTO { table_name } ({ cols_str })
-                    SELECT { cols_str } FROM temp_upsert
-                    ON CONFLICT ({ pk })
-                    DO UPDATE SET { update_stmt }
-                    WHERE { table_name }.* IS DISTINCT FROM EXCLUDED.*
-                    RETURNING (xmax = 0) AS is_insert;
-                """
-                result = conn.execute(text(query))
-                for row in result:
-                    if row.is_insert:
-                        insert_count += 1
-                    else:
-                        update_count += 1
-
-                conn.execute(text("DROP TABLE IF EXISTS temp_upsert"))
-            print(f"    - Page {page}: Processed {len(df)} records.")
-
-        # Check for next page
-        if page >= raw_json.get("total_pages", 1): break
-        page += 1
+        data = response.json()
+        records = data.get("hojin-infos") or data.get("update_infos")
         
-    return insert_count, update_count
+        if not records:
+            print(f"    - No new records found for {table_name}.")
+            break
+
+        nested_keys = {
+        "notification_certification_information_gbizinfo": "certification",
+        "award_information_gbizinfo": "commendation",
+        "financial_information_gbizinfo": "finance",
+        
+        "subsidy_information_gbizinfo": "subsidy",
+        # ... add others like 'patent', 'finance'
+    }
+    
+    list_key = nested_keys.get(table_name)
+
+    # 2. Flatten the data
+    if list_key:
+        # This creates a new row for EVERY item in the 'certification' list
+        # record_path: the path to the list
+        # meta: fields from the parent level to keep in every row
+        df = pd.json_normalize(
+            records,
+            record_path=[list_key],
+            meta=['corporate_number', 'update_date'],
+            errors='ignore'
+        )
+    else:
+        df = pd.DataFrame(records)
+
+    # 3. Apply your Column Mapping
+    column_map = MAPPING_CONFIG.get(table_name, {})
+    df = df.rename(columns=column_map)
+
+    if table_name == "notification_certification_information_gbizinfo":
+        if 'approval_date' in df.columns:
+            # This removes any rows where the date is None, NaN, or empty string
+            initial_count = len(df)
+            df = df.dropna(subset=['approval_date'])
+            # Optional: Also filter out empty strings if the API sends "" instead of null
+            df = df[df['approval_date'] != ""]
+            
+            print(f"    - Filtered out {initial_count - len(df)} records with null approval dates.")
+    
+    if not df.empty:
+        # Filter to only DB columns and export to SQL
+        db_cols = list(column_map.values())
+        df = df[[c for c in db_cols if c in df.columns]]
+        
+        df.to_sql('temp_upsert', engine, if_exists='replace', index=False)
+    
+    with engine.begin() as conn:
+        cols_str = ", ".join([f'"{c}"' for c in df.columns])
+        # Update your SQL logic here to match your unique constraints
+        query = f"""
+            INSERT INTO {table_name} ({cols_str})
+            SELECT {cols_str} FROM temp_upsert
+            ON CONFLICT DO NOTHING;
+        """
+        conn.execute(text(query))
+            conn.execute(text("DROP TABLE IF EXISTS temp_upsert"))
+
+        if page >= data.get("total_pages", 1): break
+        page += 1
 
 def main():
     if not DB_URL:
-        logging.error("DB_URL is missing!")
+        logging.error("DB_URL is missing! Check your .env file.")
         return
 
     engine = create_engine(DB_URL)
-    # Define your date range (e.g., last 32 days)
     to_date = datetime.now().strftime('%Y%m%d')
     from_date = (datetime.now() - timedelta(days=32)).strftime('%Y%m%d')
 
-    report_data = []
-    # Iterate through the Map we defined earlier
     for suffix, table in ENDPOINTS_MAP.items():
         try:
-            ins, upd = sync_endpoint(engine, suffix, table, from_date, to_date)
-            report_data.append({
-                'table': table,
-                'status': "✅" if (ins + upd) > 0 else "💤",
-                'inserted': ins,
-                'updated': upd
-            })
+            sync_endpoint(engine, suffix, table, from_date, to_date)
         except Exception as e:
             logging.error(f"Failed to sync {table}: {e}")
-            report_data.append({
-                "table": table,
-                "status": "❌ Error",
-                "inserted": 0,
-                "updated": 0
-            })
-
-    with open("summary.md", "w", encoding="utf-8") as f:
-        f.write("## 🚀 gBizInfo Daily Sync Report\n")
-        f.write(f"**Date Range:** `{from_date}` to `{to_date}`\n\n")
-        f.write("| Table Name | Status | New Inserts | Updates |\n")
-        f.write("| :--- | :---: | :---: | :---: |\n")
-        
-        for item in report_data:
-            f.write(f"| {item['table']} | {item['status']} | {item['inserted']} | {item['updated']} |\n")
-            
-    print("\n>>> Sync complete. Summary generated in summary.md")
-
 
 if __name__ == "__main__":
     main()
