@@ -408,7 +408,7 @@ def main():
             ins, upd = sync_endpoint(engine, suffix, table, from_date, to_date)
             
             duration = time.time() - start_time
-            logging.info(f'✅ Finished { table }: { ins } inserted, { upd } updated. ({duration.2f} seconds).')
+            logging.info(f'✅ Finished { table }: { ins } inserted, { upd } updated. ({duration:.2f} seconds).')
             
             report_data.append({
                 'table': table,
